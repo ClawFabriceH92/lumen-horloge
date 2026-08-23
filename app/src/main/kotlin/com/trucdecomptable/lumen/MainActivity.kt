@@ -93,9 +93,20 @@ class MainActivity : ComponentActivity() {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             })
         }
+        // Applique l'orientation persistée dès le démarrage
+        applyOrientation(prefs.getInt(KEY_ORIENTATION, 0))
         val act = this
         setContent {
             LumenScreen(prefs = prefs, activity = act) { openUri(it) }
+        }
+    }
+
+    /** Force l'orientation de l'activité selon le mode 0=Libre 1=Portrait 2=Paysage. */
+    fun applyOrientation(mode: Int) {
+        requestedOrientation = when (mode) {
+            1 -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            2 -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
 }
@@ -141,7 +152,8 @@ fun LumenScreen(
         SettingsScreen(
             prefs = prefs,
             openLink = openLink,
-            onBack = { screen = 0 }
+            onBack = { screen = 0 },
+            onOrientation = { mode -> activity.applyOrientation(mode) }
         )
     } else {
         HorlogeScreen(
@@ -286,45 +298,47 @@ fun HorlogeScreen(
             }
         }
 
-        // Roue ⚙ — haut gauche
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(18.dp)
-                .size(56.dp)
-                .background(Color(0x33151A2E), CircleShape)
-                .border(1.dp, Color(0x662A3050), CircleShape)
-                .pointerInput("gear") {
-                    detectTapGestures(onTap = { _ -> onSettings() })
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            BasicText("⚙", style = TextStyle(color = Color(0xCC8A93B0), fontSize = 28.sp))
-        }
+        // Roue ⚙ — visible uniquement quand les contrôles sont actifs (barres affichées)
+        if (!pleinEcran) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(18.dp)
+                    .size(56.dp)
+                    .background(Color(0x33151A2E), CircleShape)
+                    .border(1.dp, Color(0x662A3050), CircleShape)
+                    .pointerInput("gear") {
+                        detectTapGestures(onTap = { _ -> onSettings() })
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                BasicText("⚙", style = TextStyle(color = Color(0xCC8A93B0), fontSize = 28.sp))
+            }
 
-        // Badge mise à jour — haut droite
-        update?.let { u ->
-            if (u.isNewer) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(18.dp)
-                        .background(Color(0xFF2A2308), RoundedCornerShape(8.dp))
-                        .border(1.dp, Color(0xFFFFD54F), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                        .pointerInput(u.apkUrl) {
-                            detectTapGestures(onTap = { _ -> openLink(u.apkUrl) })
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    BasicText(
-                        text = "Mise à jour ${u.tag}",
-                        style = TextStyle(
-                            color = Color(0xFFFFD54F),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
+            // Badge mise à jour — visible avec la roue
+            update?.let { u ->
+                if (u.isNewer) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(18.dp)
+                            .background(Color(0xFF2A2308), RoundedCornerShape(8.dp))
+                            .border(1.dp, Color(0xFFFFD54F), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                            .pointerInput(u.apkUrl) {
+                                detectTapGestures(onTap = { _ -> openLink(u.apkUrl) })
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        BasicText(
+                            text = "Mise à jour ${u.tag}",
+                            style = TextStyle(
+                                color = Color(0xFFFFD54F),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
                         )
-                    )
+                    }
                 }
             }
         }

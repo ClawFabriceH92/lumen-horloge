@@ -42,7 +42,8 @@ private val TEXT = Color(0xFFE8ECF5)
 fun SettingsScreen(
     prefs: SharedPreferences,
     openLink: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOrientation: (Int) -> Unit
 ) {
     // Lecture au moment de l'ouverture — source de vérité = prefs
     var teinte by remember { mutableStateOf(prefs.getInt("teinte", 0).coerceIn(0, TEINTES.size - 1)) }
@@ -168,6 +169,7 @@ fun SettingsScreen(
                     ) {
                         orientation = 0
                         prefs.edit().putInt("orientation", 0).apply()
+                        onOrientation(0)
                     }
                     OrientationChoice(
                         label = "Portrait",
@@ -176,6 +178,7 @@ fun SettingsScreen(
                     ) {
                         orientation = 1
                         prefs.edit().putInt("orientation", 1).apply()
+                        onOrientation(1)
                     }
                     OrientationChoice(
                         label = "Paysage",
@@ -184,6 +187,7 @@ fun SettingsScreen(
                     ) {
                         orientation = 2
                         prefs.edit().putInt("orientation", 2).apply()
+                        onOrientation(2)
                     }
                 }
             }
