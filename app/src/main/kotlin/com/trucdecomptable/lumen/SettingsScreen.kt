@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -96,7 +97,7 @@ fun SettingsScreen(
                         text = "Lumen v${BuildConfig.VERSION_NAME}",
                         style = TextStyle(color = TEXT, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                     )
-                    if (update != null) {
+                    if (update?.isNewer == true) {
                         update?.let { u ->
                             UpdateBadge(u.tag) { openLink(u.apkUrl) }
                         }
@@ -171,7 +172,7 @@ private fun Caption(text: String) {
 private fun CardBlock(content: @Composable () -> Unit) {
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .background(CARD, RoundedCornerShape(16.dp))
             .border(1.dp, Color(0xFF1E2540), RoundedCornerShape(16.dp))
             .padding(20.dp)
@@ -204,7 +205,7 @@ private fun ToggleRow(
 ) {
     Row(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .background(CARD, RoundedCornerShape(16.dp))
             .border(1.dp, Color(0xFF1E2540), RoundedCornerShape(16.dp))
             .padding(start = 22.dp, end = 18.dp, top = 14.dp, bottom = 14.dp),

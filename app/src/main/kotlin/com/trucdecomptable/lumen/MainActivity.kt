@@ -238,8 +238,9 @@ private fun Horloge(
             )
         }
 
-        // Badge « mise à jour dispo » — coin haut-droit
-        update?.let { u ->
+        // Badge « mise à jour dispo » — coin haut-droit (uniquement si vraiment plus récent)
+        if (update?.isNewer == true) {
+            update?.let { u ->
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -260,6 +261,7 @@ private fun Horloge(
                         fontWeight = FontWeight.Medium
                     )
                 )
+            }
             }
         }
 
