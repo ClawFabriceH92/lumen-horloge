@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Point lumineux central = "lumen". Circle blanc + halo doux. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- halo (plus large, translucide) -->
+    <path
+        android:fillColor="#33FFFFFF"
+        android:pathData="M54,22 a32,32 0 1,1 -0.1,0 Z"/>
+    <!-- cœur lumineux -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,40 a14,14 0 1,1 -0.1,0 Z"/>
+    <!-- petit "88" stylisé : deux petits arcs blancs sous le point (horloge) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:pathData="M44,78 a6,4 0 1,1 -0.1,0 Z M56,78 a6,4 0 1,1 -0.1,0 Z"
+        android:fillAlpha="0.85"/>
+</vector>
