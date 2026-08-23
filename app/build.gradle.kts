@@ -7,6 +7,22 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Nomme l'APK final avec la version : lumen-horloge-v1.2.apk
+tasks.register("renameApk") {
+    dependsOn("assembleDebug")
+    doLast {
+        val apk = layout.buildDirectory.file("outputs/apk/debug/app-debug.apk").get().asFile
+        if (!apk.exists()) {
+            println("APK introuvable: ${apk.absolutePath}")
+            return@doLast
+        }
+        val v = android.defaultConfig.versionName
+        val target = File(apk.parentFile, "lumen-horloge-v${v}.apk")
+        apk.copyTo(target, overwrite = true)
+        println("APK renommé: ${target.absolutePath}")
+    }
+}
+
 fun releaseKeystore(): File? {
     System.getenv("LUMEN_KEYSTORE_B64")?.let { b64 ->
         val tmp = File(System.getenv("RUNNER_TEMP") ?: "/tmp", "lumen-release.keystore")
@@ -25,8 +41,8 @@ android {
         applicationId = "com.trucdecomptable.lumen"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
     }
 
     // Same pattern as cuisson-vapeur-legumes: release signed with a stable

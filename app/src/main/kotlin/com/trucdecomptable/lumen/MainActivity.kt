@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,16 +42,12 @@ import androidx.core.view.WindowInsetsCompat
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import java.time.LocalTime
-import kotlin.coroutines.resume
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 // ---------------------------------------------------------------------------
-// Teintes disponibles (CD §3.5)
+// Teintes disponibles
 // ---------------------------------------------------------------------------
-private val TEINTES = listOf(
+val TEINTES = listOf(
     Color(0xFFFFFFFF), // blanc
     Color(0xFF4FC3F7), // bleu
     Color(0xFF81C784), // vert
@@ -66,9 +62,7 @@ private const val KEY_SECONDES = "secondes"
 private const val KEY_AUTOUPDATE = "auto_update"
 
 /**
- * Luminosité « soleil » (CD §3.4) : plancher 0.15, pic 1.0.
- * Min à 2h et 22h (nuit), max à midi.
- * Visuellement : alpha du texte = 0.15 + 0.85 × sin.
+ * Luminosité « soleil » : plancher 0.15, pic 1.0.
  */
 private fun alphaPourHeure(heure: Int, minute: Int): Float {
     val h = heure + minute / 60f
@@ -78,11 +72,9 @@ private fun alphaPourHeure(heure: Int, minute: Int): Float {
     return 0.15f + 0.85f * sin.coerceIn(0f, 1f)
 }
 
-/** Vérifie une nouvelle version en fond (thread IO). */
-private suspend fun checkUpdate(): UpdateChecker.UpdateInfo? =
-    withContext(Dispatchers.IO) { UpdateChecker.latest() }
-
 class MainActivity : ComponentActivity() {
+
+    private var openUri: (String) -> Unit = {}
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -113,22 +105,39 @@ class MainActivity : ComponentActivity() {
                     WindowCompat.getInsetsController(window, view)
                         .hide(WindowInsetsCompat.Type.systemBars())
                 }
-                Horloge(
-                    teinteInitiale = teinteInitiale,
-                    secondesInitiales = secondesInitiales,
-                    autoUpdate = autoUpdate,
-                    saveTeinte = { prefs.edit().putInt(KEY_TEINTE, it).apply() },
-                    saveSecondes = { prefs.edit().putBoolean(KEY_SECONDES, it).apply() },
-                    saveAutoUpdate = { prefs.edit().putBoolean(KEY_AUTOUPDATE, it).apply() },
-                    check = { checkUpdate() },
-                    openLink = { openUri(it) },
-                    appVersion = BuildConfig.VERSION_NAME
-                )
+
+                // Navigation simple : 0 = horloge, 1 = paramètres
+                var screen by remember { mutableStateOf(0) }
+
+                if (screen == 1) {
+                    SettingsScreen(
+                        teinteInitiale = teinteInitiale,
+                        secondesInitiales = secondesInitiales,
+                        autoUpdate = autoUpdate,
+                        saveTeinte = { prefs.edit().putInt(KEY_TEINTE, it).apply() },
+                        saveSecondes = { prefs.edit().putBoolean(KEY_SECONDES, it).apply() },
+                        saveAutoUpdate = { prefs.edit().putBoolean(KEY_AUTOUPDATE, it).apply() },
+                        check = { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { UpdateChecker.latest() } },
+                        openLink = { openUri(it) },
+                        onBack = { screen = 0 }
+                    )
+                } else {
+                    Horloge(
+                        teinteInitiale = teinteInitiale,
+                        secondesInitiales = secondesInitiales,
+                        autoUpdate = autoUpdate,
+                        saveTeinte = { prefs.edit().putInt(KEY_TEINTE, it).apply() },
+                        saveSecondes = { prefs.edit().putBoolean(KEY_SECONDES, it).apply() },
+                        saveAutoUpdate = { prefs.edit().putBoolean(KEY_AUTOUPDATE, it).apply() },
+                        check = { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { UpdateChecker.latest() } },
+                        openLink = { openUri(it) },
+                        appVersion = BuildConfig.VERSION_NAME,
+                        onSettings = { screen = 1 }
+                    )
+                }
             }
         }
     }
-
-    private var openUri: (String) -> Unit = {}
 }
 
 // ---------------------------------------------------------------------------
@@ -144,20 +153,20 @@ private fun Horloge(
     saveAutoUpdate: (Boolean) -> Unit,
     check: suspend () -> UpdateChecker.UpdateInfo?,
     openLink: (String) -> Unit,
-    appVersion: String
+    appVersion: String,
+    onSettings: () -> Unit
 ) {
     var teinte by remember { mutableStateOf(teinteInitiale) }
     var secondes by remember { mutableStateOf(secondesInitiales) }
     var pickerVisible by remember { mutableStateOf(false) }
-    var autoUpdateEnabled by remember { mutableStateOf(autoUpdate) }
     var now by remember { mutableStateOf(LocalTime.now()) }
+    var showSettings by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var hideJob by remember { mutableStateOf<Job?>(null) }
 
-    // Mise à jour dispo ? (null = pas de nouvelle version / hors-ligne)
+    // Mise à jour dispo ?
     var update by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
 
-    // Tick horaire : 1 mise à jour par seconde
     LaunchedEffect(Unit) {
         while (true) {
             now = LocalTime.now()
@@ -165,7 +174,6 @@ private fun Horloge(
         }
     }
 
-    // Vérification de mise à jour au lancement (silencieuse, en arrière-plan)
     LaunchedEffect(Unit) {
         if (autoUpdate) {
             update = try { check() } catch (e: Exception) { null }
@@ -207,17 +215,36 @@ private fun Horloge(
             style = TextStyle(
                 color = heureColor,
                 fontSize = fontSizeSp.sp,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Thin
+                fontWeight = FontWeight.Thin
             )
         )
 
-        // Badge « mise à jour dispo » — coin haut-droit, discret
+        // Roue ⚙ en haut à gauche (ouvre les paramètres)
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(18.dp)
+                .size(56.dp)
+                .background(Color(0x33151A2E), CircleShape)
+                .border(1.dp, Color(0x662A3050), CircleShape)
+                .pointerInput("gear") {
+                    detectTapGestures(onTap = { _ -> showSettings = true; onSettings() })
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            BasicText(
+                text = "⚙",
+                style = TextStyle(color = Color(0xCC8A93B0), fontSize = 28.sp)
+            )
+        }
+
+        // Badge « mise à jour dispo » — coin haut-droit
         update?.let { u ->
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(16.dp)
-                    .background(Color(0xFF2E2E2E), RoundedCornerShape(8.dp))
+                    .padding(18.dp)
+                    .background(Color(0xFF2A2308), RoundedCornerShape(8.dp))
                     .border(1.dp, Color(0xFFFFD54F), RoundedCornerShape(8.dp))
                     .padding(horizontal = 14.dp, vertical = 8.dp)
                     .pointerInput(u.apkUrl) {
@@ -230,13 +257,13 @@ private fun Horloge(
                     style = TextStyle(
                         color = Color(0xFFFFD54F),
                         fontSize = 13.sp,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+                        fontWeight = FontWeight.Medium
                     )
                 )
             }
         }
 
-        // Barre de teintes (+ 2 cases utilitaires : secondes / auto-update)
+        // Barre de teintes + toggles
         if (pickerVisible) {
             Row(
                 modifier = Modifier
@@ -269,12 +296,9 @@ private fun Horloge(
                 Spacer(Modifier.width(24.dp))
                 ToggleDot(
                     label = "↻",
-                    active = autoUpdateEnabled,
+                    active = autoUpdate,
                     onClick = {
-                        autoUpdateEnabled = !autoUpdateEnabled
-                        saveAutoUpdate(autoUpdateEnabled)
-                        if (!autoUpdateEnabled) update = null
-                        else scope.launch { update = try { check() } catch (e: Exception) { null } }
+                        saveAutoUpdate(!autoUpdate)
                         pickerVisible = false
                     }
                 )
@@ -284,7 +308,7 @@ private fun Horloge(
 }
 
 @Composable
-private fun TeinteDot(color: Color, active: Boolean, onClick: () -> Unit) {
+fun TeinteDot(color: Color, active: Boolean, onClick: () -> Unit) {
     val taille = if (active) 64.dp else 52.dp
     Box(
         modifier = Modifier
@@ -301,10 +325,7 @@ private fun ToggleDot(label: String, active: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(56.dp)
-            .background(
-                if (active) Color(0xFF2E2E2E) else Color(0xFF1A1A1A),
-                CircleShape
-            )
+            .background(if (active) Color(0xFF2E2E2E) else Color(0xFF1A1A1A), CircleShape)
             .border(
                 2.dp,
                 if (active) Color(0xFF4FC3F7) else Color(0xFF555555),
@@ -318,7 +339,7 @@ private fun ToggleDot(label: String, active: Boolean, onClick: () -> Unit) {
             style = TextStyle(
                 color = if (active) Color(0xFF4FC3F7) else Color(0xFF888888),
                 fontSize = 26.sp,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                fontWeight = FontWeight.Bold
             )
         )
     }
