@@ -2,6 +2,7 @@ package com.trucdecomptable.lumen
 
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Bundle
 import android.view.WindowManager
@@ -11,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -62,6 +64,8 @@ private const val PREFS = "lumen_prefs"
 private const val KEY_TEINTE = "teinte"
 private const val KEY_SECONDES = "secondes"
 private const val KEY_AUTOUPDATE = "auto_update"
+private const val KEY_ORIENTATION = "orientation"  // 0=Libre, 1=Portrait, 2=Paysage
+private const val KEY_METEO = "meteo"  // afficher la météo sous l'heure
 
 private fun alphaPourHeure(heure: Int, minute: Int): Float {
     val h = heure + minute / 60f
@@ -122,6 +126,17 @@ fun LumenScreen(
         }
     }
 
+    // Orientation persistée (0=Libre, 1=Portrait, 2=Paysage)
+    val orientationMode = prefs.getInt(KEY_ORIENTATION, 0)
+    LaunchedEffect(orientationMode) {
+        val mode = when (orientationMode) {
+            1 -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            2 -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        activity.requestedOrientation = mode
+    }
+
     if (screen == 1) {
         SettingsScreen(
             prefs = prefs,
@@ -153,6 +168,8 @@ fun HorlogeScreen(
     var teinte by remember { mutableStateOf(prefs.getInt(KEY_TEINTE, 0).coerceIn(0, TEINTES.size - 1)) }
     var secondes by remember { mutableStateOf(prefs.getBoolean(KEY_SECONDES, false)) }
     var autoUpdate by remember { mutableStateOf(prefs.getBoolean(KEY_AUTOUPDATE, true)) }
+    var meteo by remember { mutableStateOf(prefs.getBoolean(KEY_METEO, false)) }
+    var meteoData by remember { mutableStateOf<MeteoChecker.Meso?>(null) }
     var pickerVisible by remember { mutableStateOf(false) }
     var now by remember { mutableStateOf(LocalTime.now()) }
     var hintVisible by remember { mutableStateOf(false) }
@@ -177,6 +194,18 @@ fun HorlogeScreen(
         }
     }
 
+    // Météo (Open-Meteo, IP géo, sans clé) — refresh toutes les 15 min
+    LaunchedEffect(meteo) {
+        if (meteo) {
+            while (true) {
+                meteoData = try { MeteoChecker.latest() } catch (_: Exception) { null }
+                kotlinx.coroutines.delay(15 * 60 * 1000L)
+            }
+        } else {
+            meteoData = null
+        }
+    }
+
     // Hint "Tap = plein écran" quand les bars re-déparent
     LaunchedEffect(pleinEcran) {
         if (!pleinEcran) {
@@ -189,8 +218,14 @@ fun HorlogeScreen(
         }
     }
 
-    val screenHeightDp = LocalConfiguration.current.screenHeightDp
-    val fontSizeSp: Int = (screenHeightDp * (if (secondes) 0.42f else 0.55f)).toInt()
+    val config = LocalConfiguration.current
+    val portrait = config.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+    val screenHeightDp = config.screenHeightDp
+    val fontSizeSp: Int = if (portrait) {
+        (screenHeightDp * (if (secondes) 0.16f else 0.20f)).toInt()
+    } else {
+        (screenHeightDp * (if (secondes) 0.42f else 0.55f)).toInt()
+    }
     val heureColor = TEINTES[teinte].copy(alpha = alphaPourHeure(now.hour, now.minute))
     val label = if (secondes)
         String.format("%02d:%02d:%02d", now.hour, now.minute, now.second)
@@ -216,18 +251,40 @@ fun HorlogeScreen(
                     }
                 )
             },
-        contentAlignment = Alignment.Center
+        contentAlignment = if (portrait) Alignment.TopCenter else Alignment.Center
     ) {
 
         // Chiffres
-        BasicText(
-            text = label,
-            style = TextStyle(
-                color = heureColor,
-                fontSize = fontSizeSp.sp,
-                fontWeight = FontWeight.Thin
-            )
-        )
+        Box(
+            modifier = if (portrait) Modifier.padding(top = 120.dp) else Modifier
+        ) {
+            Column(
+                modifier = Modifier,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                BasicText(
+                    text = label,
+                    style = TextStyle(
+                        color = heureColor,
+                        fontSize = fontSizeSp.sp,
+                        fontWeight = FontWeight.Thin
+                    )
+                )
+                // Météo sous l'heure
+                if (meteo) {
+                    BasicText(
+                        text = meteoData?.let { m ->
+                            "${m.temperature.toInt()}°C  ·  ${m.condition}"
+                        } ?: "…",
+                        style = TextStyle(
+                            color = Color(0x668A93B0),
+                            fontSize = if (portrait) 13.sp else 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    )
+                }
+            }
+        }
 
         // Roue ⚙ — haut gauche
         Box(

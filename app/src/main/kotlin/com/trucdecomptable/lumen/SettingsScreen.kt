@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,6 +48,8 @@ fun SettingsScreen(
     var teinte by remember { mutableStateOf(prefs.getInt("teinte", 0).coerceIn(0, TEINTES.size - 1)) }
     var secondes by remember { mutableStateOf(prefs.getBoolean("secondes", false)) }
     var autoUpdate by remember { mutableStateOf(prefs.getBoolean("auto_update", true)) }
+    var meteo by remember { mutableStateOf(prefs.getBoolean("meteo", false)) }
+    var orientation by remember { mutableStateOf(prefs.getInt("orientation", 0)) }
     var update by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
 
     LaunchedEffect(autoUpdate) {
@@ -139,6 +142,52 @@ fun SettingsScreen(
             autoUpdate = on
             prefs.edit().putBoolean("auto_update", on).apply()
         }
+
+        // Météo
+        ToggleRow(
+            label = "Afficher la météo",
+            hint = "Température + condition sous l'heure (Open-Meteo)",
+            active = meteo
+        ) { on ->
+            meteo = on
+            prefs.edit().putBoolean("meteo", on).apply()
+        }
+
+        // Orientation
+        CardBlock {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Caption("Orientation de l'écran")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OrientationChoice(
+                        label = "Libre",
+                        icon = "⬌",
+                        active = orientation == 0
+                    ) {
+                        orientation = 0
+                        prefs.edit().putInt("orientation", 0).apply()
+                    }
+                    OrientationChoice(
+                        label = "Portrait",
+                        icon = "▯",
+                        active = orientation == 1
+                    ) {
+                        orientation = 1
+                        prefs.edit().putInt("orientation", 1).apply()
+                    }
+                    OrientationChoice(
+                        label = "Paysage",
+                        icon = "▭",
+                        active = orientation == 2
+                    ) {
+                        orientation = 2
+                        prefs.edit().putInt("orientation", 2).apply()
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -172,6 +221,24 @@ private fun DotButton(label: String, onClick: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         BasicText(label, style = TextStyle(color = TEXT, fontSize = 15.sp, fontWeight = FontWeight.SemiBold))
+    }
+}
+
+@Composable
+private fun RowScope.OrientationChoice(label: String, icon: String, active: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .weight(1f)
+            .background(if (active) Color(0xFF4FC3F7) else Color(0xFF1A2035), RoundedCornerShape(12.dp))
+            .border(1.dp, if (active) Color(0xFF4FC3F7) else Color(0xFF2A3050), RoundedCornerShape(12.dp))
+            .padding(14.dp)
+            .pointerInput(label) { detectTapGestures(onTap = { _ -> onClick() }) },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            BasicText(icon, style = TextStyle(color = if (active) Color.Black else Color(0xFF8A93B0), fontSize = 20.sp))
+            BasicText(label, style = TextStyle(color = if (active) Color.Black else Color(0xFFE8ECF5), fontSize = 13.sp, fontWeight = FontWeight.SemiBold))
+        }
     }
 }
 
