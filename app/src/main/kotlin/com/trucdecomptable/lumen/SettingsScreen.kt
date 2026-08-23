@@ -1,6 +1,8 @@
 package com.trucdecomptable.lumen
 
 import android.content.SharedPreferences
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -68,6 +70,7 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .background(BG)
             .padding(36.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
