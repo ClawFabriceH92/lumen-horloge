@@ -41,8 +41,8 @@ android {
         applicationId = "com.trucdecomptable.lumen"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.6"
+        versionCode = 8
+        versionName = "1.7"
     }
 
     // Same pattern as cuisson-vapeur-legumes: release signed with a stable

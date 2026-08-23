@@ -6,6 +6,11 @@ import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Bundle
 import android.view.WindowManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import kotlin.math.abs
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -66,6 +71,7 @@ private const val KEY_SECONDES = "secondes"
 private const val KEY_AUTOUPDATE = "auto_update"
 private const val KEY_ORIENTATION = "orientation"  // 0=Libre, 1=Portrait, 2=Paysage
 private const val KEY_METEO = "meteo"  // afficher la météo sous l'heure
+private const val KEY_LUMINOSITE = "luminosite"  // 0..100 luminosité des chiffres
 
 private fun alphaPourHeure(heure: Int, minute: Int): Float {
     val h = heure + minute / 60f
@@ -78,9 +84,18 @@ private fun alphaPourHeure(heure: Int, minute: Int): Float {
 // ---------------------------------------------------------------------------
 // Activity
 // ---------------------------------------------------------------------------
-class MainActivity : ComponentActivity() {
+/** État global (Compose) piloté par l'accéléromètre : true = affichage horizontal (paysage), false = vertical (portrait). */
+object SensorState {
+    var horizontal by mutableStateOf(true)
+}
+
+class MainActivity : ComponentActivity(), SensorEventListener {
     private lateinit var prefs: SharedPreferences
     private var openUri: (String) -> Unit = {}
+    private var sensorManager: SensorManager? = null
+    private var accelerometer: Sensor? = null
+    private var sx = 0f; private var sy = 0f
+    private var lastFlipMs = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -95,10 +110,22 @@ class MainActivity : ComponentActivity() {
         }
         // Applique l'orientation persistée dès le démarrage
         applyOrientation(prefs.getInt(KEY_ORIENTATION, 0))
+        sensorManager = getSystemService(SENSOR_SERVICE) as? SensorManager
+        accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         val act = this
         setContent {
             LumenScreen(prefs = prefs, activity = act) { openUri(it) }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        accelerometer?.let { sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        sensorManager?.unregisterListener(this)
     }
 
     /** Force l'orientation de l'activité selon le mode 0=Libre 1=Portrait 2=Paysage. */
@@ -109,6 +136,25 @@ class MainActivity : ComponentActivity() {
             else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
+
+    /** Accéléromètre : détermine si l'affichage suit l'horizontal (x) ou le vertical (y). */
+    override fun onSensorChanged(event: SensorEvent) {
+        val x = event.values[0]; val y = event.values[1]
+        val a = 0.25f
+        sx += (x - sx) * a; sy += (y - sy) * a
+        val ax = abs(sx); val ay = abs(sy)
+        if (ax < 2.5f && ay < 2.5f) return  // pose plate/top-up : on garde l'état
+        val horizontal = ax > ay * 1.12f
+        if (horizontal != SensorState.horizontal) {
+            val nowMs = System.currentTimeMillis()
+            if (nowMs - lastFlipMs > 700L) {
+                lastFlipMs = nowMs
+                SensorState.horizontal = horizontal
+            }
+        }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -231,14 +277,17 @@ fun HorlogeScreen(
     }
 
     val config = LocalConfiguration.current
-    val portrait = config.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+    // Orientation d'affichage pilotée par l'accéléromètre : true = horizontal (paysage)
+    val landscape = SensorState.horizontal
     val screenHeightDp = config.screenHeightDp
-    val fontSizeSp: Int = if (portrait) {
-        (screenHeightDp * (if (secondes) 0.16f else 0.20f)).toInt()
+    val tailleFactor = (prefs.getInt("taille_chiffres", 100) / 100f).coerceIn(0.6f, 2f)
+    val fontSizeSp: Int = (if (landscape) {
+        screenHeightDp * (if (secondes) 0.50f else 0.62f)   // plus grand en horizontal
     } else {
-        (screenHeightDp * (if (secondes) 0.42f else 0.55f)).toInt()
-    }
-    val heureColor = TEINTES[teinte].copy(alpha = alphaPourHeure(now.hour, now.minute))
+        screenHeightDp * (if (secondes) 0.16f else 0.20f)
+    } * tailleFactor).toInt()
+    val luminosite = (prefs.getInt(KEY_LUMINOSITE, 100) / 100f).coerceIn(0.2f, 1f)
+    val heureColor = TEINTES[teinte].copy(alpha = (alphaPourHeure(now.hour, now.minute) * luminosite).coerceIn(0.1f, 1f))
     val label = if (secondes)
         String.format("%02d:%02d:%02d", now.hour, now.minute, now.second)
     else
@@ -251,24 +300,23 @@ fun HorlogeScreen(
             .pointerInput(pleinEcran, teinte, secondes) {
                 detectTapGestures(
                     onTap = { _ ->
-                        // Rapide : toggle plein écran / barres visibles
-                        val nowEcran = pleinEcran
-                        setPleinEcran(!nowEcran)
+                        // Tap = changer la couleur (cycle les teintes)
+                        val next = (teinte + 1) % TEINTES.size
+                        teinte = next
+                        prefs.edit().putInt(KEY_TEINTE, next).apply()
                     },
                     onLongPress = {
-                        // Long : ouvrir le picker
-                        pickerVisible = true
-                        hidePickerJob?.cancel()
-                        hidePickerJob = scope.launch { delay(2200L); pickerVisible = false }
+                        // Long = toggle plein écran (barres système)
+                        setPleinEcran(!pleinEcran)
                     }
                 )
             },
-        contentAlignment = if (portrait) Alignment.TopCenter else Alignment.Center
+        contentAlignment = if (!landscape) Alignment.TopCenter else Alignment.Center
     ) {
 
         // Chiffres
         Box(
-            modifier = if (portrait) Modifier.padding(top = 120.dp) else Modifier
+            modifier = if (!landscape) Modifier.padding(top = 120.dp) else Modifier
         ) {
             Column(
                 modifier = Modifier,
@@ -290,7 +338,7 @@ fun HorlogeScreen(
                         } ?: "…",
                         style = TextStyle(
                             color = Color(0x668A93B0),
-                            fontSize = if (portrait) 13.sp else 15.sp,
+                            fontSize = if (!landscape) 13.sp else 15.sp,
                             fontWeight = FontWeight.Medium
                         )
                     )
@@ -352,7 +400,7 @@ fun HorlogeScreen(
                 contentAlignment = Alignment.Center
             ) {
                 BasicText(
-                    text = "Tap = plein écran",
+                    text = "Tap = couleur · Long = plein écran",
                     style = TextStyle(color = Color(0x888A93B0), fontSize = 13.sp)
                 )
             }

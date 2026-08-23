@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,6 +53,8 @@ fun SettingsScreen(
     var autoUpdate by remember { mutableStateOf(prefs.getBoolean("auto_update", true)) }
     var meteo by remember { mutableStateOf(prefs.getBoolean("meteo", false)) }
     var orientation by remember { mutableStateOf(prefs.getInt("orientation", 0)) }
+    var lum by remember { mutableStateOf(prefs.getInt("luminosite", 100).toFloat()) }
+    var taille by remember { mutableStateOf(prefs.getInt("taille_chiffres", 100).toFloat()) }
     var update by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
 
     LaunchedEffect(autoUpdate) {
@@ -192,6 +196,58 @@ fun SettingsScreen(
                 }
             }
         }
+
+        // Luminosité des chiffres
+        CardBlock {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Caption("Luminosité des chiffres")
+                SliderBar(
+                    value = lum,
+                    start = 20f, end = 100f,
+                    onChange = { v ->
+                        lum = v
+                        prefs.edit().putInt("luminosite", v.toInt()).apply()
+                    }
+                )
+            }
+        }
+
+        // Taille des chiffres
+        CardBlock {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Caption("Taille des chiffres")
+                SliderBar(
+                    value = taille,
+                    start = 80f, end = 180f,
+                    onChange = { v ->
+                        taille = v
+                        prefs.edit().putInt("taille_chiffres", v.toInt()).apply()
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SliderBar(value: Float, start: Float, end: Float, onChange: (Float) -> Unit) {
+    val config = androidx.compose.ui.platform.LocalConfiguration.current
+    // Largeur disponible : écran - padding carte (20+20) - padding colonne (36+36)
+    val cardW = (config.screenWidthDp - 72).coerceAtLeast(60).toFloat()
+    val frac = ((value - start) / (end - start)).coerceIn(0f, 1f)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .pointerInput(end) {
+                detectTapGestures(onTap = { off ->
+                    onChange(start + (off.x / cardW).coerceIn(0f, 1f) * (end - start))
+                })
+            }
+    ) {
+        Box(modifier = Modifier.fillMaxWidth().height(6.dp).background(Color(0xFF2A3050), RoundedCornerShape(3.dp)).align(Alignment.Center))
+        Box(modifier = Modifier.width((cardW * frac).dp).height(6.dp).background(Color(0xFF4FC3F7), RoundedCornerShape(3.dp)).align(Alignment.CenterStart))
+        Box(modifier = Modifier.offset(x = (cardW * frac - 11f).dp).size(22.dp).background(Color.White, CircleShape).align(Alignment.Center))
     }
 }
 
