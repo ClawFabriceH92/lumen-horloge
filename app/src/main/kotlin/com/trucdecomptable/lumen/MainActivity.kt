@@ -99,6 +99,8 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Auto-update check at launch (release builds only).
+        com.trucdecomptable.lumen.update.UpdateManager.start(this)
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK))

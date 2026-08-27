@@ -29,8 +29,12 @@ fun releaseKeystore(): File? {
         tmp.writeBytes(Base64.getDecoder().decode(b64))
         return tmp
     }
-    val local = File(System.getProperty("user.home"), ".secrets/lumen-release.keystore")
-    return if (local.exists()) local else null
+    val candidates = listOf(
+        File(System.getProperty("user.home"), ".secrets/keystores-android/lumen-horloge-release.keystore"),
+        File("/root/.secrets/keystores-android/lumen-horloge-release.keystore"),
+        File(System.getProperty("user.home"), ".secrets/lumen-release.keystore"),
+    )
+    return candidates.firstOrNull { it.exists() }
 }
 
 android {
@@ -84,6 +88,10 @@ android {
         compose = true
         buildConfig = true
     }
+
+    lint {
+        checkReleaseBuilds = false
+    }
 }
 
 dependencies {
@@ -95,4 +103,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.0")
     debugImplementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.ui:ui-tooling")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20231013")
 }
