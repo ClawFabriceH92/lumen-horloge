@@ -46,7 +46,7 @@ jobs:
         run: |
           VERSION=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -1)
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
-          cp app/build/outputs/apk/release/app-release.apk "lumen-horloge-v${{VERSION}}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "lumen-horloge-v${VERSION}.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
